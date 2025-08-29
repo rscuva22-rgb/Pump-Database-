@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Pump Database of RSC (Uva)</title>
+  <style>
+    body { 
+      font-family: Arial, sans-serif; 
+      margin: 20px; 
+      background: linear-gradient(135deg, #e3f2fd, #bbdefb);
+    }
+    h1 { 
+      text-align: center; 
+      color: #1565c0;
+      margin-bottom: 20px;
+    }
+    .container { 
+      max-width: 1100px; 
+      margin: auto; 
+      background: #ffffffdd; 
+      padding: 20px; 
+      border-radius: 12px; 
+      box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+    }
+    table { 
+      width: 100%; 
+      border-collapse: collapse; 
+      margin-top: 20px; 
+    }
+    th, td { 
+      border: 1px solid #ccc; 
+      padding: 10px; 
+      text-align: center; 
+    }
+    th { 
+      background: #1976d2; 
+      color: #fff; 
+    }
+    tr:nth-child(even) { background: #e3f2fd; }
+    input, select, button { 
+      padding: 8px; 
+      margin: 6px; 
+      border-radius: 6px; 
+      border: 1px solid #bbb;
+    }
+    input:focus, select:focus { outline: none; border-color: #1976d2; box-shadow: 0 0 5px #1976d2; }
+    button { background: #1976d2; color: #fff; border: none; cursor: pointer; transition: 0.3s; }
+    button:hover { background: #0d47a1; }
+    .actions button { margin: 0 2px; padding: 5px 10px; border-radius: 4px; }
+    .input-group { display: inline-flex; align-items: center; background: #f5f5f5; border: 1px solid #bbb; border-radius: 6px; margin: 6px; padding: 0 6px; }
+    .input-group input { border: none; outline: none; padding: 8px; background: transparent; }
+    .input-group span { margin-left: 4px; color: #555; }
+  </style>
+</head>
+<body>
+<div class="container">
+  <h1>Pump Database of RSC (Uva)</h1>
+  <div>
+    <input type="text" id="pumpId" placeholder="Pump ID">
+    <input type="text" id="location" placeholder="Location">
+    <input type="text" id="type" placeholder="Type/Model">
+    <div class="input-group">
+      <input type="number" id="head" placeholder="Pump Head">
+      <span>(m)</span>
+    </div>
+    <div class="input-group">
+      <input type="number" id="capacity" placeholder="Capacity">
+      <span>(m³/h)</span>
+    </div>
+    <div class="input-group">
+      <input type="number" id="power" placeholder="Motor Power">
+      <span>(kW)</span>
+    </div>
+    <select id="status">
+      <option value="Working">Working</option>
+      <option value="Not Working">Not Working</option>
+    </select>
+    <select id="region">
+      <option value="Bandarawela">Bandarawela</option>
+      <option value="Monaragala">Monaragala</option>
+    </select>
+    <button onclick="addPump()">Add Pump</button>
+    <button onclick="exportCSV()">Export CSV</button>
+  </div>
+  <div>
+    <input type="text" id="search" placeholder="Search pumps..." onkeyup="renderTable()">
+    <select id="regionFilter" onchange="renderTable()">
+      <option value="">All Regions</option>
+      <option value="Bandarawela">Bandarawela</option>
+      <option value="Monaragala">Monaragala</option>
+    </select>
+  </div>
+  <table>
+    <thead>
+      <tr>
+        <th>Pump ID</th>
+        <th>Location</th>
+        <th>Type/Model</th>
+        <th>Pump Head (m)</th>
+        <th>Capacity (m³/h)</th>
+        <th>Motor Power (kW)</th>
+        <th>Status</th>
+        <th>Region</th>
+        <th>Actions</th>
+      </tr>
+    </thead>
+    <tbody id="pumpTable"></tbody>
+  </table>
+</div>
+<script>
+  let pumps = JSON.parse(localStorage.getItem("pumps")) || [];
+  let editIndex = null;
+  function saveData() { localStorage.setItem("pumps", JSON.stringify(pumps)); }
+  function addPump() {
+    const pumpId = document.getElementById("pumpId").value;
+    const location = document.getElementById("location").value;
+    const type = document.getElementById("type").value;
+    const head = document.getElementById("head").value;
+    const capacity = document.getElementById("capacity").value;
+    const power = document.getElementById("power").value;
+    const status = document.getElementById("status").value;
+    const region = document.getElementById("region").value;
+    if (!pumpId || !location || !type || !head || !capacity || !power) { alert("Please fill all fields"); return; }
+    const pump = { pumpId, location, type, head, capacity, power, status, region };
+    if (editIndex !== null) { pumps[editIndex] = pump; editIndex = null; } else { pumps.push(pump); }
+    saveData(); clearForm(); renderTable(); savePumpToGoogleSheet(pump);
+  }
+  function clearForm() {
+    document.getElementById("pumpId").value = "";
+    document.getElementById("location").value = "";
+    document.getElementById("type").value = "";
+    document.getElementById("head").value = "";
+    document.getElementById("capacity").value = "";
+    document.getElementById("power").value = "";
+    document.getElementById("status").value = "Working";
+    document.getElementById("region").value = "Bandarawela";
+  }
+  function renderTable() {
+    const tbody = document.getElementById("pumpTable");
+    const search = document.getElementById("search").value.toLowerCase();
+    const regionFilter = document.getElementById("regionFilter").value;
+    tbody.innerHTML = "";
+    pumps.filter(p => Object.values(p).some(v => v.toString().toLowerCase().includes(search)))
+      .filter(p => regionFilter === "" || p.region === regionFilter)
+      .forEach((pump, index) => {
+        const row = `<tr>
+          <td>${pump.pumpId}</td>
+          <td>${pump.location}</td>
+          <td>${pump.type}</td>
+          <td>${pump.head} m</td>
+          <td>${pump.capacity} m³/h</td>
+          <td>${pump.power} kW</td>
+          <td>${pump.status}</td>
+          <td>${pump.region}</td>
+          <td class='actions'><button onclick="editPump(${index})">Edit</button><button onclick="deletePump(${index})">Delete</button></td>
+        </tr>`;
+        tbody.innerHTML += row;
+      });
+  }
+  function editPump(index) {
+    const pump = pumps[index];
+    document.getElementById("pumpId").value = pump.pumpId;
+    document.getElementById("location").value = pump.location;
+    document.getElementById("type").value = pump.type;
+    document.getElementById("head").value = pump.head;
+    document.getElementById("capacity").value = pump.capacity;
+    document.getElementById("power").value = pump.power;
+    document.getElementById("status").value = pump.status;
+    document.getElementById("region").value = pump.region;
+    editIndex = index;
+  }
+  function deletePump(index) { if (confirm("Are you sure to delete this pump?")) { pumps.splice(index, 1); saveData(); renderTable(); } }
+  function exportCSV() {
+    if (pumps.length === 0) { alert("No data to export"); return; }
+    const headers = ["Pump ID","Location","Type/Model","Pump Head (m)","Capacity (m³/h)","Motor Power (kW)","Status","Region"];
+    const rows = pumps.map(p => [p.pumpId, p.location, p.type, p.head, p.capacity, p.power, p.status, p.region]);
+    const csvContent = "data:text/csv;charset=utf-8," + headers.join(",") + "\n" + rows.map(r => r.join(",")).join("\n");
+    const link = document.createElement("a");
+    link.setAttribute("href", encodeURI(csvContent));
+    link.setAttribute("download", "pump_database.csv");
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  }
+  const apiUrl = "https://script.google.com/macros/s/AKfycbz6YYsNZRrovyR-aychdn6Qk9_2KfTkKdV7HjuOxK6v0pz3CWk2J0-oUpZr69H0F1KQ0w/exec";
+  function savePumpToGoogleSheet(pump) {
+    fetch(apiUrl, { method: "POST", body: JSON.stringify(pump), headers: { "Content-Type": "application/json" } })
+      .then(res => res.text())
+      .then(() => { loadPumpsFromGoogleSheet(); });
+  }
+  function loadPumpsFromGoogleSheet() {
+    fetch(apiUrl)
+      .then(res => res.json())
+      .then(rows => {
+        pumps = rows.slice(1).map(r => ({ pumpId: r[0], location: r[1], type: r[2], head: r[3], capacity: r[4], power: r[5], status: r[6], region: r[7] }));
+        saveData(); renderTable();
+      });
+  }
+  renderTable();
+</script>
+</body>
+</html>
