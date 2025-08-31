@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pump Management System - RSC (Uva)</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 0; padding: 0; background:#F5F5F5; color:#333; }
+    header { background:#FFFFFF; color:#333; padding:1rem; text-align:center; box-shadow: 0 2px 5px rgba(0,0,0,0.1); border-bottom:2px solid #CCC; }
+    .container { padding: 1rem; max-width:1200px; margin:auto; }
+    table { width: 100%; border-collapse: collapse; margin-top:1rem; background:#fff; border-radius:8px; overflow:hidden; box-shadow:0 4px 12px rgba(0,0,0,0.05); }
+    th, td { border: 1px solid #DDD; padding:0.75rem; text-align:center; color:#333; }
+    th { background:#EEE; color:#222; }
+    tr:hover { background:#F9F9F9; }
+    button { padding:0.5rem 1rem; margin:0.2rem; cursor:pointer; border:none; border-radius:5px; transition:0.3s; box-shadow:0 2px 5px rgba(0,0,0,0.1); }
+    button:hover { opacity:0.85; }
+    #addBtn { background:#4CAF50; color:white; }
+    #exportBtn { background:#FF9800; color:white; }
+    .modal { display:none; position:fixed; top:0; left:0;width:100%;height:100%;background:rgba(0,0,0,0.4); justify-content:center; align-items:center; z-index:1000; }
+    .modal.open { display:flex; }
+    .modal-content { background:#ffffff; padding:1.5rem; border-radius:12px; width:480px; max-width:95%; box-shadow:0 12px 25px rgba(0,0,0,0.15); color:#333; border-top:4px solid #4CAF50; }
+    .modal-content h3 { margin-top:0; text-align:center; color:#222; font-family:'Segoe UI', sans-serif; }
+    .modal-content input, .modal-content select, .modal-content textarea { width:100%; margin:0.3rem 0 1rem 0; padding:0.6rem; border:1px solid #CCC; border-radius:6px; background:#FAFAFA; color:#333; }
+    .modal-content label { font-weight:600; color:#222; }
+    .modal-content button { width:48%; font-weight:bold; }
+    .chart-container { max-width:450px; margin:2rem auto; background:#FFF; padding:1.5rem; border-radius:12px; box-shadow:0 6px 12px rgba(0,0,0,0.05); text-align:center; color:#333; }
+    .filters { display:flex; flex-wrap:wrap; gap:0.5rem; margin-bottom:1rem; }
+    .filters input, .filters select { padding:0.5rem; border-radius:6px; border:1px solid #CCC; background:#fff; color:#333; }
+    footer { background:#FFFFFF; color:#333; padding:1rem; margin-top:2rem; text-align:center; font-size:0.95rem; line-height:1.5; box-shadow: 0 -2px 5px rgba(0,0,0,0.05); border-top:2px solid #CCC; }
+    #uploadProgressContainer { display: none; margin-top: 10px; background: #f1f1f1; border-radius: 6px; overflow: hidden; height: 20px; width: 100%; }
+    #uploadProgress { height: 100%; width: 0%; background: #4CAF50; text-align: center; color: white; font-size: 12px; transition: width 0.3s; }
+  </style>
+</head>
+<body>
+<header>
+  <h1>Pump Management System - RSC (Uva)</h1>
+</header>
+<div class="container">
+  <div class="filters">
+    <button id="addBtn">Add New Pump</button>
+    <button id="exportBtn">Export CSV</button>
+    <input type="text" id="search" placeholder="Search Pump ID">
+    <select id="statusFilter">
+      <option value="">All Status</option>
+      <option value="Working">Working</option>
+      <option value="Not Working">Not Working</option>
+    </select>
+    <select id="regionFilter">
+      <option value="">All Regions</option>
+      <option value="Bandarawela">Bandarawela</option>
+      <option value="Monaragala">Monaragala</option>
+    </select>
+    <button id="clearFiltersBtn">Clear Filters</button>
+  </div>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Pump ID</th><th>Region</th><th>Pump Location</th><th>Head (m)</th>
+        <th>Capacity (m³/h)</th><th>Power (kW)</th><th>Status</th>
+        <th>Date of Commence</th><th>Contractor</th><th>Contact</th>
+        <th>Performance Curve</th><th>Remarks</th><th>Actions</th>
+      </tr>
+    </thead>
+    <tbody id="pumpTable"></tbody>
+  </table>
+
+  <div class="chart-container">
+    <canvas id="statusChart"></canvas>
+    <p id="workingPercent"></p>
+    <p id="notWorkingPercent"></p>
+  </div>
+</div>
+
+<!-- Modal -->
+<div class="modal" id="modal">
+  <div class="modal-content">
+    <h3 id="formTitle">Add Pump</h3>
+    <form id="form">
+      <input type="hidden" id="editKey">
+      <input type="text" id="name" placeholder="Pump ID" required>
+      <select id="region" required>
+        <option value="Bandarawela">Bandarawela</option>
+        <option value="Monaragala">Monaragala</option>
+      </select>
+      <input type="text" id="location" placeholder="Pump Location" required>
+      <input type="number" id="head" placeholder="Head (m)" required>
+      <input type="number" id="capacity" placeholder="Capacity (m³/h)" required>
+      <input type="number" id="power" placeholder="Power (kW)" required>
+      <select id="status" required>
+        <option value="Working">Working</option>
+        <option value="Not Working">Not Working</option>
+      </select>
+      <label for="date">Date of Commence</label>
+      <input type="date" id="date" required>
+      <input type="text" id="contractor" placeholder="Contractor" required>
+      <input type="text" id="contact" placeholder="Contact" required>
+      <label for="curveFile">Performance Curve</label>
+      <input type="file" id="curveFile" accept="image/*,.pdf">
+      <div id="uploadProgressContainer">
+        <div id="uploadProgress">0%</div>
+      </div>
+      <textarea id="remark" placeholder="Add Remarks"></textarea>
+      <button type="submit" style="background:#4CAF50; color:white;">Save</button>
+      <button type="button" id="cancelBtn" style="background:#F44336; color:white;">Cancel</button>
+    </form>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<!-- ✅ Firebase v8 CDN -->
+<script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-storage.js"></script>
+
+<script>
+  const firebaseConfig = {
+    apiKey: "AIzaSyDkCFr-63wJOXW4ZQJj1RTCBp_80s7H9jw",
+    authDomain: "pump-database-13e25.firebaseapp.com",
+    databaseURL: "https://pump-database-13e25-default-rtdb.firebaseio.com",
+    projectId: "pump-database-13e25",
+    storageBucket: "pump-database-13e25.appspot.com",
+    messagingSenderId: "269362357992",
+    appId: "1:269362357992:web:93f99581df8a0eded48b5d",
+    measurementId: "G-RB2PWHJCY9"
+  };
+
+  firebase.initializeApp(firebaseConfig);
+  const db = firebase.database();
+  const storage = firebase.storage();
+
+  const form = document.getElementById('form');
+  const modal = document.getElementById('modal');
+  const pumpTable = document.getElementById('pumpTable');
+  const addBtn = document.getElementById('addBtn');
+  const cancelBtn = document.getElementById('cancelBtn');
+  const uploadProgressContainer = document.getElementById('uploadProgressContainer');
+  const uploadProgress = document.getElementById('uploadProgress');
+
+  const ctx = document.getElementById('statusChart').getContext('2d');
+  let statusChart = new Chart(ctx, {
+    type: 'doughnut',
+    data: { labels: ['Working','Not Working'], datasets: [{ data: [0,0], backgroundColor: ['#4CAF50','#F44336'] }] },
+    options: { responsive:true, plugins:{ legend:{ position:'bottom' } } }
+  });
+
+  function updateChart(pumps) {
+    const workingCount = pumps.filter(p => p.status === 'Working').length;
+    const notWorkingCount = pumps.filter(p => p.status === 'Not Working').length;
+    statusChart.data.datasets[0].data = [workingCount, notWorkingCount];
+    statusChart.update();
+    const total = pumps.length || 1;
+    document.getElementById('workingPercent').textContent = `Working: ${((workingCount/total)*100).toFixed(1)}%`;
+    document.getElementById('notWorkingPercent').textContent = `Not Working: ${((notWorkingCount/total)*100).toFixed(1)}%`;
+  }
+
+  db.ref("pumps").on("value", snapshot => {
+    const data = snapshot.val() || {};
+    const pumps = Object.keys(data).map(key => ({ key, ...data[key] }));
+    renderTable(pumps);
+    updateChart(pumps);
+  });
+
+  function renderTable(pumps) {
+    pumpTable.innerHTML = "";
+    pumps.forEach(pump => {
+      const row = document.createElement('tr');
+      row.innerHTML = `
+        <td>${pump.name}</td>
+        <td>${pump.region}</td>
+        <td>${pump.location}</td>
+        <td>${pump.head}</td>
+        <td>${pump.capacity}</td>
+        <td>${pump.power}</td>
+        <td>${pump.status}</td>
+        <td>${pump.date}</td>
+        <td>${pump.contractor}</td>
+        <td>${pump.contact}</td>
+        <td>${pump.curveFile ? `<a href="${pump.curveFile}" target="_blank">View File</a>` : ""}</td>
+        <td>${pump.remark}</td>
+        <td>
+          <button onclick="editPump('${pump.key}')" style="background:#4CAF50; color:white;">Edit</button>
+          <button onclick="deletePump('${pump.key}')" style="background:#FFC107; color:white;">Delete</button>
+        </td>`;
+      pumpTable.appendChild(row);
+    });
+  }
+
+  addBtn.addEventListener('click', () => {
+    form.reset();
+    document.getElementById('editKey').value = '';
+    uploadProgressContainer.style.display = 'none';
+    uploadProgress.style.width = "0%";
+    uploadProgress.textContent = "0%";
+    modal.classList.add('open');
+  });
+  cancelBtn.addEventListener('click', () => modal.classList.remove('open'));
+
+  form.addEventListener('submit', e => {
+    e.preventDefault();
+    const editKey = document.getElementById('editKey').value;
+    const fileInput = document.getElementById('curveFile');
+    const file = fileInput.files[0];
+
+    const pumpData = {
+      name: document.getElementById('name').value,
+      region: document.getElementById('region').value,
+      location: document.getElementById('location').value,
+      head: document.getElementById('head').value,
+      capacity: document.getElementById('capacity').value,
+      power: document.getElementById('power').value,
+      status: document.getElementById('status').value,
+      date: document.getElementById('date').value,
+      contractor: document.getElementById('contractor').value,
+      contact: document.getElementById('contact').value,
+      remark: document.getElementById('remark').value,
+      curveFile: ""
+    };
+
+    if (file) {
+      uploadProgressContainer.style.display = 'block';
+      const storageRef = storage.ref('performance_curves/' + Date.now() + "_" + file.name);
+      const uploadTask = storageRef.put(file);
+
+      uploadTask.on('state_changed',
+        snapshot => {
+          const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+          uploadProgress.style.width = progress + "%";
+          uploadProgress.textContent = Math.round(progress) + "%";
+        },
+        error => { alert("Upload failed: " + error.message); },
+        () => {
+          uploadTask.snapshot.ref.getDownloadURL().then(url => {
+            pumpData.curveFile = url;
+            savePump(editKey, pumpData);
+            modal.classList.remove('open');
+          });
+        }
+      );
+    } else {
+      savePump(editKey, pumpData);
+      modal.classList.remove('open');
+    }
+  });
+
+  function savePump(editKey, pumpData) {
+    if (editKey) {
+      db.ref("pumps/"+editKey).set(pumpData);
+    } else {
+      db.ref("pumps").push(pumpData);
+    }
+  }
+
+  window.editPump = function(key) {
+    db.ref("pumps/"+key).once("value").then(snapshot => {
+      const pump = snapshot.val();
+      document.getElementById('editKey').value = key;
+      document.getElementById('name').value = pump.name;
+      document.getElementById('region').value = pump.region;
+      document.getElementById('location').value = pump.location;
+      document.getElementById('head').value = pump.head;
+      document.getElementById('capacity').value = pump.capacity;
+      document.getElementById('power').value = pump.power;
+      document.getElementById('status').value = pump.status;
+      document.getElementById('date').value = pump.date;
+      document.getElementById('contractor').value = pump.contractor;
+      document.getElementById('contact').value = pump.contact;
+      document.getElementById('remark').value = pump.remark;
+      modal.classList.add('open');
+    });
+  }
+
+  window.deletePump = function(key) {
+    db.ref("pumps/"+key).remove();
+  }
+</script>
+
+<footer>
+  <p>Mechanical and Electrical Section, Regional Support Center (Uva), National Water Supply and Drainage Board of Sri Lanka</p>
+</footer>
+</body>
+</html>
